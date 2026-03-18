@@ -1,0 +1,69 @@
+# 練習 2：創建 Deployment
+# 目標：理解 Deployment 的工作原理和副本管理
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  labels:
+    app: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.24
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+
+---
+# 使用方式：
+# 1. 創建 Deployment
+#    kubectl apply -f 02-deployment.yaml
+#
+# 2. 查看 Deployment
+#    kubectl get deployments
+#    kubectl get deployment nginx-deployment
+#
+# 3. 查看 ReplicaSet（由 Deployment 自動創建）
+#    kubectl get replicasets
+#    kubectl get rs
+#
+# 4. 查看 Pod（由 ReplicaSet 創建）
+#    kubectl get pods -l app=nginx
+#
+# 5. 擴容/縮容
+#    kubectl scale deployment nginx-deployment --replicas=5
+#    kubectl scale deployment nginx-deployment --replicas=2
+#
+# 6. 更新鏡像（滾動更新）
+#    kubectl set image deployment/nginx-deployment nginx=nginx:1.25
+#
+# 7. 查看滾動更新狀態
+#    kubectl rollout status deployment/nginx-deployment
+#
+# 8. 查看更新歷史
+#    kubectl rollout history deployment/nginx-deployment
+#
+# 9. 回滾到上一個版本
+#    kubectl rollout undo deployment/nginx-deployment
+#
+# 10. 回滾到指定版本
+#     kubectl rollout undo deployment/nginx-deployment --to-revision=1
+#
+# 11. 刪除 Deployment
+#     kubectl delete deployment nginx-deployment

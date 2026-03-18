@@ -1,0 +1,114 @@
+# 練習 1：StatefulSet（有狀態應用）
+# 目標：理解 StatefulSet 如何管理有狀態應用
+
+---
+# Headless Service（為 StatefulSet 提供穩定網絡標識）
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-headless
+spec:
+  clusterIP: None  # Headless Service
+  selector:
+    app: mysql
+  ports:
+  - port: 3306
+    name: mysql
+
+---
+# StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  serviceName: mysql-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        ports:
+        - containerPort: 3306
+          name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "rootpassword"
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/mysql
+
+  # VolumeClaimTemplate（為每個 Pod 創建獨立的 PVC）
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 1Gi
+
+---
+# 使用方式：
+# 1. 創建 StatefulSet
+#    kubectl apply -f 01-statefulset.yaml
+#
+# 2. 查看 StatefulSet
+#    kubectl get statefulset
+#    kubectl get sts
+#
+# 3. 查看 Pod（注意 Pod 名稱的規律：<statefulset-name>-<ordinal>）
+#    kubectl get pods -l app=mysql
+#    # 會看到：mysql-0, mysql-1, mysql-2
+#
+# 4. 查看 PVC（每個 Pod 自動創建）
+#    kubectl get pvc
+#    # 會看到：data-mysql-0, data-mysql-1, data-mysql-2
+#
+# 5. 查看穩定網絡標識（Pod DNS）
+#    kubectl run dns-test --image=busybox --rm -it --restart=Never -- sh
+#    # 在 Pod 內執行：
+#    nslookup mysql-0.mysql-headless
+#    nslookup mysql-1.mysql-headless
+#    # DNS 格式：<pod-name>.<service-name>.<namespace>.svc.cluster.local
+#
+# 6. 測試有序啟動和停止
+#    # StatefulSet 會按順序啟動：mysql-0 -> mysql-1 -> mysql-2
+#    kubectl get pods -l app=mysql -w
+#
+# 7. 擴容（有序擴容）
+#    kubectl scale statefulset mysql --replicas=5
+#    # 會創建 mysql-3, mysql-4
+#
+# 8. 縮容（逆序縮容）
+#    kubectl scale statefulset mysql --replicas=2
+#    # 會刪除 mysql-4, mysql-3（逆序）
+#
+# 9. 刪除 Pod（會自動重建，保持相同名稱和存儲）
+#    kubectl delete pod mysql-1
+#    # 新 Pod 仍然叫 mysql-1，並掛載相同的 PVC
+#
+# 10. 更新 StatefulSet（滾動更新）
+#     kubectl set image statefulset/mysql mysql=mysql:8.1
+#     kubectl rollout status statefulset/mysql
+#
+# 11. 刪除 StatefulSet（保留 PVC）
+#     kubectl delete statefulset mysql
+#     # PVC 不會被刪除，數據得以保留
+#
+# 12. 刪除 StatefulSet 和 PVC
+#     kubectl delete -f 01-statefulset.yaml
+#     kubectl delete pvc -l app=mysql
+#
+# StatefulSet 特性總結：
+# - 穩定的網絡標識（Pod 名稱固定）
+# - 穩定的持久化存儲（PVC 與 Pod 綁定）
+# - 有序部署和擴展（0, 1, 2...）
+# - 有序刪除和縮容（...2, 1, 0）

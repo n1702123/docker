@@ -1,0 +1,190 @@
+# 練習 2：Ingress（HTTP/HTTPS 路由）
+# 目標：理解 Ingress 如何暴露多個服務
+
+---
+# 部署兩個不同的應用
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: app1
+  template:
+    metadata:
+      labels:
+        app: app1
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.24
+        ports:
+        - containerPort: 80
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app2
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: app2
+  template:
+    metadata:
+      labels:
+        app: app2
+    spec:
+      containers:
+      - name: httpd
+        image: httpd:2.4
+        ports:
+        - containerPort: 80
+
+---
+# 為兩個應用創建 Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: app1-service
+spec:
+  selector:
+    app: app1
+  ports:
+  - port: 80
+    targetPort: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app2-service
+spec:
+  selector:
+    app: app2
+  ports:
+  - port: 80
+    targetPort: 80
+
+---
+# Ingress 規則
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: demo-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  # 基於路徑的路由
+  - host: demo.local
+    http:
+      paths:
+      - path: /app1
+        pathType: Prefix
+        backend:
+          service:
+            name: app1-service
+            port:
+              number: 80
+      - path: /app2
+        pathType: Prefix
+        backend:
+          service:
+            name: app2-service
+            port:
+              number: 80
+
+---
+# 多主機名路由
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: multi-host-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: app1.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app1-service
+            port:
+              number: 80
+  - host: app2.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app2-service
+            port:
+              number: 80
+
+---
+# 使用方式：
+# 前置條件：安裝 Ingress Controller
+#
+# 對於 Minikube：
+#    minikube addons enable ingress
+#
+# 對於一般集群（使用 Helm 安裝 Nginx Ingress）：
+#    helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+#    helm repo update
+#    helm install nginx-ingress ingress-nginx/ingress-nginx
+#
+# 1. 創建資源
+#    kubectl apply -f 02-ingress.yaml
+#
+# 2. 查看 Ingress
+#    kubectl get ingress
+#    kubectl describe ingress demo-ingress
+#
+# 3. 查看 Ingress Controller
+#    kubectl get pods -n ingress-nginx
+#
+# 4. 配置本地 hosts 文件（用於測試）
+#    # Windows: C:\Windows\System32\drivers\etc\hosts
+#    # Linux/Mac: /etc/hosts
+#    # 添加以下行（IP 為 Minikube IP 或 Ingress Controller 的 External IP）：
+#    192.168.49.2  demo.local app1.local app2.local
+#
+# 5. 測試路徑路由
+#    curl http://demo.local/app1
+#    curl http://demo.local/app2
+#
+# 6. 測試主機名路由
+#    curl http://app1.local
+#    curl http://app2.local
+#
+# 7. 查看 Ingress 後端
+#    kubectl get ingress demo-ingress -o yaml
+#
+# 8. 配置 HTTPS（需要 TLS Secret）
+#    # 生成自簽名證書
+#    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+#      -keyout tls.key -out tls.crt -subj "/CN=demo.local"
+#
+#    # 創建 Secret
+#    kubectl create secret tls demo-tls --key tls.key --cert tls.crt
+#
+#    # 在 Ingress 中添加 tls 配置：
+#    # spec:
+#    #   tls:
+#    #   - hosts:
+#    #     - demo.local
+#    #     secretName: demo-tls
+#
+# 9. 測試 HTTPS
+#    curl -k https://demo.local/app1
+#
+# 10. 刪除資源
+#     kubectl delete -f 02-ingress.yaml

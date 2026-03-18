@@ -1,0 +1,46 @@
+# 練習 1：創建第一個 Pod
+# 目標：理解 Pod 的基本結構和創建方式
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-first-pod
+  labels:
+    app: demo
+    environment: learning
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.24
+    ports:
+    - containerPort: 80
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "250m"
+      limits:
+        memory: "128Mi"
+        cpu: "500m"
+
+---
+# 使用方式：
+# 1. 創建 Pod
+#    kubectl apply -f 01-first-pod.yaml
+#
+# 2. 查看 Pod 狀態
+#    kubectl get pods
+#    kubectl get pod my-first-pod
+#
+# 3. 查看 Pod 詳細資訊
+#    kubectl describe pod my-first-pod
+#
+# 4. 查看 Pod 日誌
+#    kubectl logs my-first-pod
+#
+# 5. 進入 Pod 執行命令
+#    kubectl exec -it my-first-pod -- bash
+#
+# 6. 刪除 Pod
+#    kubectl delete pod my-first-pod
+#    # 或使用
+#    kubectl delete -f 01-first-pod.yaml

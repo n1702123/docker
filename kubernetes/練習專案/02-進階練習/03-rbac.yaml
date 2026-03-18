@@ -1,0 +1,208 @@
+# 練習 3：RBAC（角色訪問控制）
+# 目標：理解 Kubernetes 權限管理機制
+
+---
+# 創建一個 Namespace 用於測試
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev-team
+
+---
+# ServiceAccount（服務帳戶）
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dev-user
+  namespace: dev-team
+
+---
+# Role（命名空間級別的角色）
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: dev-team
+rules:
+# 允許讀取 pods
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+
+# 允許讀取 pods 日誌
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get"]
+
+---
+# RoleBinding（綁定角色到用戶）
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: read-pods
+  namespace: dev-team
+subjects:
+# 綁定到 ServiceAccount
+- kind: ServiceAccount
+  name: dev-user
+  namespace: dev-team
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ClusterRole（集群級別的角色）
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: node-reader
+rules:
+# 允許讀取所有 nodes
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch"]
+
+# 允許讀取所有 namespaces
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list"]
+
+---
+# ClusterRoleBinding（綁定集群角色）
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: read-nodes
+subjects:
+- kind: ServiceAccount
+  name: dev-user
+  namespace: dev-team
+roleRef:
+  kind: ClusterRole
+  name: node-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# 進階範例：開發者角色（可以管理 Deployment, Service）
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+  namespace: dev-team
+rules:
+# 管理 Deployments
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# 管理 Services
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# 管理 ConfigMaps 和 Secrets
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+# 讀取 Pods 和日誌
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch"]
+
+# 執行 Pod 命令
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+
+---
+# ServiceAccount for developer
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: developer
+  namespace: dev-team
+
+---
+# RoleBinding for developer
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: developer-binding
+  namespace: dev-team
+subjects:
+- kind: ServiceAccount
+  name: developer
+  namespace: dev-team
+roleRef:
+  kind: Role
+  name: developer
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# 使用方式：
+# 1. 創建 RBAC 資源
+#    kubectl apply -f 03-rbac.yaml
+#
+# 2. 查看 ServiceAccount
+#    kubectl get sa -n dev-team
+#    kubectl describe sa dev-user -n dev-team
+#
+# 3. 查看 Role
+#    kubectl get role -n dev-team
+#    kubectl describe role pod-reader -n dev-team
+#
+# 4. 查看 RoleBinding
+#    kubectl get rolebinding -n dev-team
+#    kubectl describe rolebinding read-pods -n dev-team
+#
+# 5. 查看 ClusterRole
+#    kubectl get clusterrole node-reader
+#    kubectl describe clusterrole node-reader
+#
+# 6. 查看 ClusterRoleBinding
+#    kubectl get clusterrolebinding read-nodes
+#
+# 7. 測試權限（以 dev-user 身份）
+#    # 創建測試 Pod
+#    kubectl run test-pod --image=nginx -n dev-team
+#
+#    # 獲取 ServiceAccount token
+#    kubectl create token dev-user -n dev-team
+#
+#    # 或者創建使用該 ServiceAccount 的 Pod
+#    kubectl run auth-test --image=nginx --serviceaccount=dev-user -n dev-team
+#
+# 8. 檢查用戶權限
+#    # 檢查是否可以列出 pods（應該可以）
+#    kubectl auth can-i list pods --as=system:serviceaccount:dev-team:dev-user -n dev-team
+#
+#    # 檢查是否可以刪除 pods（應該不可以）
+#    kubectl auth can-i delete pods --as=system:serviceaccount:dev-team:dev-user -n dev-team
+#
+#    # 檢查是否可以查看 nodes（應該可以，因為有 ClusterRole）
+#    kubectl auth can-i list nodes --as=system:serviceaccount:dev-team:dev-user
+#
+# 9. 查看某個用戶的所有權限
+#    kubectl describe clusterrolebinding | grep dev-user
+#    kubectl describe rolebinding -n dev-team | grep dev-user
+#
+# 10. 創建用於本地測試的 kubeconfig
+#     TOKEN=$(kubectl create token dev-user -n dev-team --duration=24h)
+#     kubectl config set-credentials dev-user --token=$TOKEN
+#     kubectl config set-context dev-context --cluster=<cluster-name> --user=dev-user --namespace=dev-team
+#     kubectl config use-context dev-context
+#
+# 11. 刪除資源
+#     kubectl delete -f 03-rbac.yaml
+#
+# RBAC 權限動詞說明：
+# - get: 獲取單個資源
+# - list: 列出資源集合
+# - watch: 監聽資源變化
+# - create: 創建資源
+# - update: 更新資源（完整替換）
+# - patch: 修改資源（部分更新）
+# - delete: 刪除資源
+# - deletecollection: 批量刪除
