@@ -146,6 +146,7 @@ steps:
 | `actions/setup-python@v5` | 安裝 Python |
 | `actions/cache@v4` | 快取相依套件，加速 CI |
 | `docker/build-push-action@v5` | Build 並 push Docker image |
+| `peaceiris/actions-gh-pages@v3` | 部署靜態檔案到 GitHub Pages |
 
 ---
 
@@ -308,3 +309,4 @@ Push 之後，可以在以下位置查看 Workflow 執行狀態：
 | Secrets | 安全存放敏感資訊 |
 
 > 接下來我們要把 Docker 整合進 GitHub Actions，實現自動 Build 並 Push Image！
+> 另外也可以搭配 GitHub Pages，自動部署 Next.js 靜態網站 → 參考 [04-NextJS-GitHub-Pages.md](04-NextJS-GitHub-Pages.md)
